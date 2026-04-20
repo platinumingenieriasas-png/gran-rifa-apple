@@ -20,10 +20,8 @@ DATA_FILE = "boletos.json"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Estados conversación
 ELIGIENDO_BOLETO, ELIGIENDO_PAGO, INGRESANDO_NOMBRE, INGRESANDO_TELEFONO = range(4)
 
-# ── Persistencia en archivo JSON ────────────────────────────
 def cargar_datos():
     if os.path.exists(DATA_FILE):
         with open(DATA_FILE, "r") as f:
@@ -34,7 +32,6 @@ def guardar_datos(datos):
     with open(DATA_FILE, "w") as f:
         json.dump(datos, f, ensure_ascii=False, indent=2)
 
-# ── /start ──────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     texto = (
         "🍎 *¡Bienvenido a la Gran Rifa Apple!*\n\n"
@@ -57,56 +54,46 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(teclado)
     )
 
-# ── Ver boletos ─────────────────────────────────────────────
 async def ver_boletos(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
     datos = cargar_datos()
     reservados = set(datos["reservados"].keys())
     confirmados = set(str(n) for n in datos["confirmados"])
-
-    # Mostrar en grupos de 10
     pagina = context.user_data.get("pagina", 0)
     inicio = pagina * 50 + 1
     fin = min(inicio + 49, TOTAL_BOLETOS)
-
     lineas = []
     for i in range(inicio, fin + 1):
         key = str(i)
         num = str(i).zfill(3)
         if key in confirmados:
-            lineas.append(f"🔴 {num}")
+            lineas.append(f"🔴{num}")
         elif key in reservados:
-            lineas.append(f"🟡 {num}")
+            lineas.append(f"🟡{num}")
         else:
-            lineas.append(f"🟢 {num}")
-
+            lineas.append(f"🟢{num}")
     texto = (
         f"🎟 *Boletos {inicio}-{fin}*\n\n"
         + "  ".join(lineas) +
         "\n\n🟢 Disponible  🟡 Reservado  🔴 Vendido"
     )
-
     nav = []
     if pagina > 0:
         nav.append(InlineKeyboardButton("⬅ Anteriores", callback_data=f"pagina_{pagina-1}"))
     if fin < TOTAL_BOLETOS:
         nav.append(InlineKeyboardButton("Siguientes ➡", callback_data=f"pagina_{pagina+1}"))
-
     teclado = []
     if nav:
         teclado.append(nav)
     teclado.append([InlineKeyboardButton("🎯 Reservar mi boleto", callback_data="reservar")])
     teclado.append([InlineKeyboardButton("🔙 Volver", callback_data="inicio")])
-
     await query.edit_message_text(
         texto,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(teclado)
     )
 
-# ── Paginación ──────────────────────────────────────────────
 async def cambiar_pagina(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -114,7 +101,6 @@ async def cambiar_pagina(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["pagina"] = pagina
     await ver_boletos(update, context)
 
-# ── Estado general ───────────────────────────────────────────
 async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -123,9 +109,7 @@ async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reservados = len(datos["reservados"])
     disponibles = TOTAL_BOLETOS - confirmados - reservados
     pct = round((confirmados / TOTAL_BOLETOS) * 100)
-
     barra = "█" * (pct // 10) + "░" * (10 - pct // 10)
-
     texto = (
         f"📊 *Estado de la Gran Rifa Apple*\n\n"
         f"`{barra}` {pct}%\n\n"
@@ -142,13 +126,11 @@ async def estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     await query.edit_message_text(texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(teclado))
 
-# ── Inicio reserva ───────────────────────────────────────────
 async def iniciar_reserva(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     await query.edit_message_text(
-        "🎯 *Reservar boleto*\n\n"
-        "Escribe el número que deseas reservar (del 1 al 200):",
+        "🎯 *Reservar boleto*\n\nEscribe el número que deseas reservar (del 1 al 200):",
         parse_mode="Markdown"
     )
     return ELIGIENDO_BOLETO
@@ -162,7 +144,6 @@ async def recibir_boleto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except ValueError:
         await update.message.reply_text("❌ Por favor escribe un número válido entre 1 y 200.")
         return ELIGIENDO_BOLETO
-
     datos = cargar_datos()
     key = str(num)
     if key in datos["reservados"] or num in datos["confirmados"]:
@@ -171,7 +152,6 @@ async def recibir_boleto(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
         return ELIGIENDO_BOLETO
-
     context.user_data["boleto"] = num
     teclado = [
         [InlineKeyboardButton("💵 Contado — $55.000", callback_data="pago_contado")],
@@ -206,21 +186,15 @@ async def recibir_nombre(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def recibir_telefono(update: Update, context: ContextTypes.DEFAULT_TYPE):
     telefono = update.message.text.strip()
     context.user_data["telefono"] = telefono
-
     boleto = context.user_data["boleto"]
     nombre = context.user_data["nombre"]
     pago_texto = context.user_data["pago_texto"]
     user = update.effective_user
     key = str(boleto)
-
     datos = cargar_datos()
-
-    # Verificar de nuevo
     if key in datos["reservados"] or boleto in datos["confirmados"]:
         await update.message.reply_text("😔 Lo sentimos, ese boleto acaba de ser reservado. Intenta con otro.")
         return ConversationHandler.END
-
-    # Guardar reserva
     datos["reservados"][key] = {
         "nombre": nombre,
         "telefono": telefono,
@@ -229,8 +203,6 @@ async def recibir_telefono(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "telegram_user": user.username or user.first_name
     }
     guardar_datos(datos)
-
-    # Confirmar al cliente
     await update.message.reply_text(
         f"🎉 *¡Reserva recibida!*\n\n"
         f"🎟 Boleto: *#{str(boleto).zfill(3)}*\n"
@@ -241,8 +213,6 @@ async def recibir_telefono(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"¡Mucha suerte! 🍀",
         parse_mode="Markdown"
     )
-
-    # Notificar al admin
     teclado_admin = [
         [
             InlineKeyboardButton("✅ Confirmar pago", callback_data=f"confirmar_{key}"),
@@ -264,25 +234,20 @@ async def recibir_telefono(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return ConversationHandler.END
 
-# ── Admin: confirmar pago ────────────────────────────────────
 async def confirmar_pago(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query.from_user.id != ADMIN_ID:
         await query.answer("⛔ No tienes permiso.", show_alert=True)
         return
     await query.answer()
-
     key = query.data.split("_")[1]
     datos = cargar_datos()
-
     if key not in datos["reservados"]:
         await query.edit_message_text("⚠️ Este boleto ya no está en reserva.")
         return
-
     info = datos["reservados"].pop(key)
     datos["confirmados"].append(int(key))
     guardar_datos(datos)
-
     await query.edit_message_text(
         f"✅ *Pago confirmado*\n\n"
         f"🎟 Boleto #{key.zfill(3)} — {info['nombre']}\n"
@@ -290,8 +255,6 @@ async def confirmar_pago(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"💰 {info['pago']}",
         parse_mode="Markdown"
     )
-
-    # Notificar al cliente
     try:
         await context.bot.send_message(
             chat_id=info["telegram_id"],
@@ -306,30 +269,22 @@ async def confirmar_pago(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-# ── Admin: liberar boleto ────────────────────────────────────
 async def liberar_boleto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query.from_user.id != ADMIN_ID:
         await query.answer("⛔ No tienes permiso.", show_alert=True)
         return
     await query.answer()
-
     key = query.data.split("_")[1]
     datos = cargar_datos()
-
     if key in datos["reservados"]:
         info = datos["reservados"].pop(key)
         guardar_datos(datos)
-        await query.edit_message_text(
-            f"🔓 Boleto #{key.zfill(3)} liberado.\n({info['nombre']} — {info['telefono']})"
-        )
+        await query.edit_message_text(f"🔓 Boleto #{key.zfill(3)} liberado.\n({info['nombre']} — {info['telefono']})")
         try:
             await context.bot.send_message(
                 chat_id=info["telegram_id"],
-                text=(
-                    f"😔 Tu reserva del boleto *#{key.zfill(3)}* fue cancelada.\n\n"
-                    f"Si crees que es un error, contacta al administrador.",
-                ),
+                text=f"😔 Tu reserva del boleto *#{key.zfill(3)}* fue cancelada.\n\nSi crees que es un error, contacta al administrador.",
                 parse_mode="Markdown"
             )
         except Exception:
@@ -337,7 +292,6 @@ async def liberar_boleto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.edit_message_text("⚠️ No se encontró esa reserva.")
 
-# ── Admin: /admin ─────────────────────────────────────────────
 async def panel_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -345,7 +299,6 @@ async def panel_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     confirmados = len(datos["confirmados"])
     reservados = len(datos["reservados"])
     disponibles = TOTAL_BOLETOS - confirmados - reservados
-
     texto = (
         f"🔐 *Panel de Administrador*\n\n"
         f"🟢 Disponibles: {disponibles}\n"
@@ -358,10 +311,7 @@ async def panel_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
             texto += f"• #{k.zfill(3)} — {v['nombre']} ({v['telefono']})\n"
     else:
         texto += "Ninguna por ahora.\n"
-
-    teclado = [
-        [InlineKeyboardButton("🔓 Liberar un número", callback_data="admin_liberar")],
-    ]
+    teclado = [[InlineKeyboardButton("🔓 Liberar un número", callback_data="admin_liberar")]]
     await update.message.reply_text(texto, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(teclado))
 
 async def admin_liberar_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -403,7 +353,6 @@ async def manejar_texto_admin(update: Update, context: ContextTypes.DEFAULT_TYPE
         except ValueError:
             await update.message.reply_text("❌ Número inválido.")
 
-# ── Volver al inicio ─────────────────────────────────────────
 async def volver_inicio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -423,10 +372,8 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text("❌ Reserva cancelada. Escribe /start para volver a comenzar.")
     return ConversationHandler.END
 
-# ── Main ─────────────────────────────────────────────────────
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
-
     conv = ConversationHandler(
         entry_points=[CallbackQueryHandler(iniciar_reserva, pattern="^reservar$")],
         states={
@@ -438,7 +385,6 @@ def main():
         fallbacks=[CallbackQueryHandler(cancelar, pattern="^cancelar$")],
         per_message=False
     )
-
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", panel_admin))
     app.add_handler(conv)
@@ -450,9 +396,8 @@ def main():
     app.add_handler(CallbackQueryHandler(volver_inicio, pattern="^inicio$"))
     app.add_handler(CallbackQueryHandler(admin_liberar_prompt, pattern="^admin_liberar$"))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, manejar_texto_admin))
-
     print("🤖 Bot Gran Rifa Apple corriendo...")
-    app.run_polling()
+    app.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
     main()
