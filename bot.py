@@ -370,6 +370,139 @@ async def cancelar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.edit_message_text("❌ Reserva cancelada. Escribe /start para volver a comenzar.")
     return ConversationHandler.END
 
+
+async def lista_disponibles(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    datos = cargar_datos()
+    reservados = set(datos["reservados"].keys())
+    confirmados = set(str(n) for n in datos["confirmados"])
+    
+    disponibles = []
+    for i in range(1, TOTAL_BOLETOS + 1):
+        key = str(i)
+        if key not in reservados and i not in datos["confirmados"]:
+            disponibles.append(str(i).zfill(3))
+    
+    if not disponibles:
+        await update.message.reply_text("😮 ¡No quedan boletos disponibles!")
+        return
+    
+    # Agrupar en filas de 10
+    filas = [disponibles[i:i+10] for i in range(0, len(disponibles), 10)]
+    texto = f"🟢 *Boletos disponibles ({len(disponibles)}/{TOTAL_BOLETOS}):*
+
+"
+    for fila in filas:
+        texto += "  ".join(fila) + "
+"
+    texto += f"
+💡 _Copia y comparte por WhatsApp_"
+    await update.message.reply_text(texto, parse_mode="Markdown")
+
+async def resumen_visual(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    datos = cargar_datos()
+    reservados = set(datos["reservados"].keys())
+    confirmados = set(str(n) for n in datos["confirmados"])
+    
+    texto = "🎟 *Gran Rifa Apple — Estado de boletos*
+
+"
+    fila = ""
+    nums = ""
+    count = 0
+    
+    for i in range(1, TOTAL_BOLETOS + 1):
+        key = str(i)
+        if key in reservados:
+            fila += "🟡"
+        elif str(i) in [str(c) for c in datos["confirmados"]]:
+            fila += "🔴"
+        else:
+            fila += "🟢"
+        count += 1
+        if count % 10 == 0:
+            texto += fila + "
+"
+            fila = ""
+    
+    if fila:
+        texto += fila + "
+"
+    
+    confirmados_n = len(datos["confirmados"])
+    reservados_n = len(datos["reservados"])
+    disponibles_n = TOTAL_BOLETOS - confirmados_n - reservados_n
+    
+    texto += f"
+🟢 Disponible: {disponibles_n}  🟡 Reservado: {reservados_n}  🔴 Vendido: {confirmados_n}"
+    texto += f"
+
+📸 _Toma pantallazo y comparte por WhatsApp_"
+    await update.message.reply_text(texto, parse_mode="Markdown")
+
+async def registrar_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    
+    args = context.args
+    if len(args) < 3:
+        await update.message.reply_text(
+            "❌ Formato incorrecto.
+
+"
+            "Usa: `/registrar NÚMERO NOMBRE CELULAR`
+
+"
+            "Ejemplo: `/registrar 45 Juan Pérez 3001234567`",
+            parse_mode="Markdown"
+        )
+        return
+    
+    try:
+        num = int(args[0])
+        if num < 1 or num > TOTAL_BOLETOS:
+            raise ValueError
+    except ValueError:
+        await update.message.reply_text("❌ Número de boleto inválido (1-200).")
+        return
+    
+    nombre = args[1] + " " + args[2] if len(args) > 3 else args[1]
+    # Si el nombre tiene varias palabras
+    if len(args) >= 4:
+        nombre = " ".join(args[1:-1])
+        telefono = args[-1]
+    else:
+        nombre = args[1]
+        telefono = args[2]
+    
+    key = str(num)
+    datos = cargar_datos()
+    
+    if key in datos["reservados"] or num in datos["confirmados"]:
+        await update.message.reply_text(f"⚠️ El boleto #{str(num).zfill(3)} ya está ocupado.")
+        return
+    
+    # Registrar directamente como confirmado
+    datos["confirmados"].append(num)
+    guardar_datos(datos)
+    
+    await update.message.reply_text(
+        f"✅ *Boleto registrado exitosamente*
+
+"
+        f"🎟 Boleto: *#{str(num).zfill(3)}*
+"
+        f"👤 Nombre: {nombre}
+"
+        f"📱 Celular: {telefono}
+"
+        f"💰 Registrado por WhatsApp",
+        parse_mode="Markdown"
+    )
+
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
     conv = ConversationHandler(
@@ -384,6 +517,9 @@ def main():
     )
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("admin", panel_admin))
+    app.add_handler(CommandHandler("lista", lista_disponibles))
+    app.add_handler(CommandHandler("resumen", resumen_visual))
+    app.add_handler(CommandHandler("registrar", registrar_manual))
     app.add_handler(conv)
     app.add_handler(CallbackQueryHandler(ver_boletos, pattern="^ver_boletos$"))
     app.add_handler(CallbackQueryHandler(cambiar_pagina, pattern="^pagina_"))
