@@ -375,133 +375,84 @@ async def lista_disponibles(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     datos = cargar_datos()
-    reservados = set(datos["reservados"].keys())
-    confirmados = set(str(n) for n in datos["confirmados"])
-    
     disponibles = []
     for i in range(1, TOTAL_BOLETOS + 1):
-        key = str(i)
-        if key not in reservados and i not in datos["confirmados"]:
+        if str(i) not in datos["reservados"] and i not in datos["confirmados"]:
             disponibles.append(str(i).zfill(3))
-    
     if not disponibles:
-        await update.message.reply_text("😮 ¡No quedan boletos disponibles!")
+        await update.message.reply_text("No quedan boletos disponibles.")
         return
-    
-    # Agrupar en filas de 10
-    filas = [disponibles[i:i+10] for i in range(0, len(disponibles), 10)]
-    texto = f"🟢 *Boletos disponibles ({len(disponibles)}/{TOTAL_BOLETOS}):*
-
-"
-    for fila in filas:
-        texto += "  ".join(fila) + "
-"
-    texto += f"
-💡 _Copia y comparte por WhatsApp_"
+    filas = [disponibles[j:j+10] for j in range(0, len(disponibles), 10)]
+    header = "*Boletos disponibles (" + str(len(disponibles)) + "/" + str(TOTAL_BOLETOS) + "):*"
+    body = "\n".join(["  ".join(f) for f in filas])
+    texto = header + "\n\n" + body + "\n\nCopia y comparte por WhatsApp"
     await update.message.reply_text(texto, parse_mode="Markdown")
 
 async def resumen_visual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     datos = cargar_datos()
-    reservados = set(datos["reservados"].keys())
-    confirmados = set(str(n) for n in datos["confirmados"])
-    
-    texto = "🎟 *Gran Rifa Apple — Estado de boletos*
-
-"
+    header = "*Gran Rifa Apple - Estado de boletos*"
+    rows = ""
     fila = ""
-    nums = ""
     count = 0
-    
     for i in range(1, TOTAL_BOLETOS + 1):
-        key = str(i)
-        if key in reservados:
-            fila += "🟡"
-        elif str(i) in [str(c) for c in datos["confirmados"]]:
-            fila += "🔴"
+        if str(i) in datos["reservados"]:
+            fila += "\U0001f7e1"
+        elif i in datos["confirmados"]:
+            fila += "\U0001f534"
         else:
-            fila += "🟢"
+            fila += "\U0001f7e2"
         count += 1
         if count % 10 == 0:
-            texto += fila + "
-"
+            rows += fila + "\n"
             fila = ""
-    
     if fila:
-        texto += fila + "
-"
-    
-    confirmados_n = len(datos["confirmados"])
-    reservados_n = len(datos["reservados"])
-    disponibles_n = TOTAL_BOLETOS - confirmados_n - reservados_n
-    
-    texto += f"
-🟢 Disponible: {disponibles_n}  🟡 Reservado: {reservados_n}  🔴 Vendido: {confirmados_n}"
-    texto += f"
-
-📸 _Toma pantallazo y comparte por WhatsApp_"
+        rows += fila + "\n"
+    cn = len(datos["confirmados"])
+    rn = len(datos["reservados"])
+    dn = TOTAL_BOLETOS - cn - rn
+    legend = "\U0001f7e2 Disponible: " + str(dn) + "  \U0001f7e1 Reservado: " + str(rn) + "  \U0001f534 Vendido: " + str(cn)
+    texto = header + "\n\n" + rows + "\n" + legend + "\n\nToma pantallazo y comparte por WhatsApp"
     await update.message.reply_text(texto, parse_mode="Markdown")
 
 async def registrar_manual(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
-    
     args = context.args
-    if len(args) < 3:
+    if not args or len(args) < 3:
         await update.message.reply_text(
-            "❌ Formato incorrecto.
-
-"
-            "Usa: `/registrar NÚMERO NOMBRE CELULAR`
-
-"
-            "Ejemplo: `/registrar 45 Juan Pérez 3001234567`",
-            parse_mode="Markdown"
+            "Formato: /registrar NUMERO NOMBRE CELULAR\n\nEjemplo: /registrar 45 Juan Perez 3001234567"
         )
         return
-    
     try:
         num = int(args[0])
         if num < 1 or num > TOTAL_BOLETOS:
             raise ValueError
     except ValueError:
-        await update.message.reply_text("❌ Número de boleto inválido (1-200).")
+        await update.message.reply_text("Numero invalido (1-200).")
         return
-    
-    nombre = args[1] + " " + args[2] if len(args) > 3 else args[1]
-    # Si el nombre tiene varias palabras
     if len(args) >= 4:
         nombre = " ".join(args[1:-1])
         telefono = args[-1]
     else:
         nombre = args[1]
         telefono = args[2]
-    
     key = str(num)
     datos = cargar_datos()
-    
     if key in datos["reservados"] or num in datos["confirmados"]:
-        await update.message.reply_text(f"⚠️ El boleto #{str(num).zfill(3)} ya está ocupado.")
+        await update.message.reply_text("El boleto #" + str(num).zfill(3) + " ya esta ocupado.")
         return
-    
-    # Registrar directamente como confirmado
     datos["confirmados"].append(num)
     guardar_datos(datos)
-    
     await update.message.reply_text(
-        f"✅ *Boleto registrado exitosamente*
-
-"
-        f"🎟 Boleto: *#{str(num).zfill(3)}*
-"
-        f"👤 Nombre: {nombre}
-"
-        f"📱 Celular: {telefono}
-"
-        f"💰 Registrado por WhatsApp",
+        "*Boleto registrado exitosamente*\n\nBoleto: #" + str(num).zfill(3) +
+        "\nNombre: " + nombre +
+        "\nCelular: " + telefono +
+        "\nRegistrado manualmente por WhatsApp",
         parse_mode="Markdown"
     )
+
 
 def main():
     app = Application.builder().token(BOT_TOKEN).build()
