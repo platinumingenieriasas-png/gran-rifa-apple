@@ -39,11 +39,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📱 iPhone 17 256GB\n"
         "⌚ Apple Watch SE 40mm\n"
         "🎧 AirPods 4 con Cancelación de Ruido\n\n"
-        "💰 *Precio:* $55.000 COP contado ó 5 cuotas de $11.000/semana\n\n"
-        "🎯 *El sorteo se realizará una vez se vendan los 200 boletos.*\n"
+        "💰 *Precio:* $55.000 COP\n\n"
+        "📅 *Fecha del sorteo: 12 de mayo*\n"
+        "🎯 El sorteo se realizará una vez se vendan los 200 boletos.\n"
         "📺 Sorteo en vivo para total transparencia.\n\n"
         "Usa los botones para participar 👇"
     )
+
     teclado = [
         [InlineKeyboardButton("🎟 Ver boletos disponibles", callback_data="ver_boletos")],
         [InlineKeyboardButton("📊 Estado de la rifa", callback_data="estado")],
@@ -153,17 +155,13 @@ async def recibir_boleto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ELIGIENDO_BOLETO
     context.user_data["boleto"] = num
-    teclado = [
-        [InlineKeyboardButton("💵 Contado — $55.000", callback_data="pago_contado")],
-        [InlineKeyboardButton("📅 5 Cuotas — $11.000/semana", callback_data="pago_cuotas")],
-        [InlineKeyboardButton("❌ Cancelar", callback_data="cancelar")],
-    ]
+    context.user_data["pago"] = "contado"
+    context.user_data["pago_texto"] = "Contado — $55.000 COP"
     await update.message.reply_text(
-        f"✅ El boleto *#{str(num).zfill(3)}* está disponible.\n\n💰 ¿Cómo deseas pagar?",
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(teclado)
+        f"✅ El boleto *#{str(num).zfill(3)}* está disponible.\n\n💰 Precio: *$55.000 COP*\n\n👤 ¿Cuál es tu nombre completo?",
+        parse_mode="Markdown"
     )
-    return ELIGIENDO_PAGO
+    return INGRESANDO_NOMBRE
 
 async def recibir_pago(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -378,7 +376,6 @@ def main():
         entry_points=[CallbackQueryHandler(iniciar_reserva, pattern="^reservar$")],
         states={
             ELIGIENDO_BOLETO: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_boleto)],
-            ELIGIENDO_PAGO: [CallbackQueryHandler(recibir_pago, pattern="^pago_")],
             INGRESANDO_NOMBRE: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_nombre)],
             INGRESANDO_TELEFONO: [MessageHandler(filters.TEXT & ~filters.COMMAND, recibir_telefono)],
         },
